@@ -15,7 +15,8 @@ Pod::Spec.new do |s|
   s.source       = { :git => "https://github.com/BarnettFL/react-native-favor.git", :tag => "#{s.version}" }
 
   s.source_files = "ios/**/*.{h,m,mm}"
-
+  s.vendored_frameworks = "ios/favorX.xcframework"
+  s.static_framework = true
   s.dependency "React-Core"
 
   # Don't install the dependencies when we run `pod install` in the old architecture.

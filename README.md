@@ -11,11 +11,11 @@ npm install react-native-favor
 ## Usage
 
 ```js
-import { multiply } from 'react-native-favor';
+import * as FavorX from 'react-native-favor';
 
 // ...
 
-const result = await multiply(3, 7);
+const version = await FavorX.version();
 ```
 
 ## Contributing

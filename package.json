@@ -1,6 +1,6 @@
 {
   "name": "react-native-favor",
-  "version": "0.1.0",
+  "version": "1.4.1",
   "description": "test",
   "main": "lib/commonjs/index",
   "module": "lib/module/index",
@@ -41,13 +41,13 @@
     "ios",
     "android"
   ],
-  "repository": "https://github.com/BarnettFL/react-native-favor",
-  "author": "FavorLabs <Barnett@favorlabs.io> (https://github.com/BarnettFL)",
+  "repository": "https://github.com/FavorLabs/react-native-favor",
+  "author": "FavorLabs <Barnett@favorlabs.io> (https://github.com/FavorLabs)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/BarnettFL/react-native-favor/issues"
+    "url": "https://github.com/FavorLabs/react-native-favor/issues"
   },
-  "homepage": "https://github.com/BarnettFL/react-native-favor#readme",
+  "homepage": "https://github.com/FavorLabs/react-native-favor#readme",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },

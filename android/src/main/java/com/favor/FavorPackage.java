@@ -1,4 +1,4 @@
-package com.favor;
+package io.favorlabs.favor;
 
 import androidx.annotation.NonNull;
 

@@ -12,7 +12,7 @@ Pod::Spec.new do |s|
   s.authors      = package["author"]
 
   s.platforms    = { :ios => "11.0" }
-  s.source       = { :git => "https://github.com/BarnettFL/react-native-favor.git", :tag => "#{s.version}" }
+  s.source       = { :git => "https://github.com/FavorLabs/react-native-favor.git", :tag => "#{s.version}" }
 
   s.source_files = "ios/**/*.{h,m,mm}"
   s.vendored_frameworks = "ios/favorX.xcframework"

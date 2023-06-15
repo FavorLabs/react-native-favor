@@ -1,4 +1,9 @@
-import { NativeModules, Platform } from 'react-native';
+import {
+  NativeModules,
+  Platform,
+  NativeEventEmitter,
+  EmitterSubscription,
+} from 'react-native';
 
 const LINKING_ERROR =
   `The package 'react-native-favor' doesn't seem to be linked. Make sure: \n\n` +
@@ -17,6 +22,30 @@ const Favor = NativeModules.Favor
       }
     );
 
+const localEventEmitter = new NativeEventEmitter(Favor);
+let stateListener: null | EmitterSubscription = null;
+
+type VPNState = {
+  up: string;
+  down: string;
+  total: string;
+  running: boolean;
+};
+
+export const addVpnStateListener = (callback: (e: VPNState) => void) => {
+  stateListener = localEventEmitter.addListener('stateChanged', (e) =>
+    callback(e)
+  );
+};
+
+export const removeVpnStateListener = () => {
+  if (!stateListener) {
+    return;
+  }
+  stateListener.remove();
+  stateListener = null;
+};
+
 export interface Group {
   'name': string;
   'type': number;
@@ -32,6 +61,8 @@ export interface Options {
   'proxy-enable'?: boolean;
   'proxy-group'?: string;
   'proxy-port'?: number;
+  'vpn-enable'?: boolean;
+  'vpn-port'?: number;
   'groups'?: Array<Group>;
   'network-id': number;
   'p2p-port'?: number;
@@ -44,11 +75,18 @@ export interface Options {
   'full-node'?: boolean;
   'chain-endpoint': string;
   'oracle-contract-addr': string;
-  'traffic'?: false;
+  'traffic'?: boolean;
   'traffic-contract-addr'?: string;
   'verbosity'?: string;
   'enable-tls'?: boolean;
   'password'?: string;
+}
+
+export interface VpnConfig {
+  group: string;
+  nodes: Array<String>;
+  whitelist?: Array<String>;
+  blacklist?: Array<String>;
 }
 
 export function version(): Promise<string> {
@@ -65,6 +103,14 @@ export function stop(): Promise<Error> {
   return Favor.stop();
 }
 
+export function startVPN(cfg: VpnConfig): Promise<Error> {
+  return Favor.startVPN(cfg);
+}
+
+export function stopVPN(): Promise<Error> {
+  return Favor.stopVPN();
+}
+
 const defaultOptions = {
   'api-port': 2633,
   'debug-api-port': 2635,
@@ -73,6 +119,8 @@ const defaultOptions = {
   'proxy-enable': false,
   'proxy-group': '',
   'proxy-port': 2639,
+  'vpn-enable': false,
+  'vpn-port': 2638,
   'groups': [],
   'network-id': 0,
   'p2p-port': 2634,

@@ -1,31 +1,114 @@
 package io.favorlabs.favor;
 
+import static android.app.Activity.RESULT_OK;
+
+import android.app.Activity;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
+import android.net.VpnService;
+import android.os.IBinder;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
+import com.facebook.react.bridge.ActivityEventListener;
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.BaseActivityEventListener;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.module.annotations.ReactModule;
 import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 import java.util.Objects;
 
+import io.favorlabs.favor.model.Global;
+import io.favorlabs.favor.service.MyVpnService;
 import mobile.Mobile;
-import mobile.Node;
 import mobile.Options;
 
 @ReactModule(name = FavorModule.NAME)
-public class FavorModule extends ReactContextBaseJavaModule {
+public class FavorModule extends ReactContextBaseJavaModule implements MyVpnService.StateListener{
   public static final String NAME = "Favor";
-  private static volatile Node node = null;
   private final ReactApplicationContext reactContext;
+  private static final int START_VPN_PROFILE = 70;
+  private Promise vpnPromise;
+  private final ActivityEventListener mActivityEventListener = new BaseActivityEventListener() {
+    @Override
+    public void onActivityResult(Activity activity, int requestCode, int resultCode, Intent intent) {
+      if (requestCode == START_VPN_PROFILE) {
+        if (vpnPromise != null) {
+          if (resultCode == RESULT_OK) {
+            Log.i(NAME, "onActivityResult: start VPN...");
+            startVpn(vpnPromise);
+          } else {
+            vpnPromise.reject(NAME, "onActivityResult: Prepare VPN failed");
+            vpnPromise = null;
+          }
+        }
+      }
+    }
+  };
 
-  public FavorModule(ReactApplicationContext reactContext) {
-    super(reactContext);
-    this.reactContext = reactContext;
+  private ServiceConnection mConnection = new ServiceConnection() {
+    @Override
+    public void onServiceConnected(ComponentName className, IBinder service) {
+      Log.d(NAME, "VPN onServiceConnected: ");
+    }
+
+    @Override
+    public void onServiceDisconnected(ComponentName arg0) {
+      Log.d(NAME, "VPN onServiceDisconnected: ");
+    }
+  };
+
+  private void prepareVpn(final Promise promise) {
+    Activity currentActivity = getCurrentActivity();
+
+    if (currentActivity == null) {
+      promise.reject(NAME, "Activity doesn't exist");
+      return;
+    }
+
+    vpnPromise = promise;
+    Intent intent = VpnService.prepare(currentActivity);
+
+    if (intent != null) {
+      currentActivity.startActivityForResult(intent, START_VPN_PROFILE);
+      return;
+    }
+
+    startVpn(vpnPromise);
+  }
+
+  private void startVpn(Promise promise) {
+    Intent intent = new Intent(reactContext, MyVpnService.class);
+    intent.setAction(MyVpnService.CONNECT_ACTION);
+    reactContext.startForegroundService(intent);
+    promise.resolve(null);
+    Log.i(NAME, "start VPN successful");
+  }
+
+  public FavorModule(ReactApplicationContext context) {
+    super(context);
+    reactContext = context;
+    reactContext.addActivityEventListener(mActivityEventListener);
+    MyVpnService.addStateListener(this);
+
+    Intent intent = new Intent(context, MyVpnService.class);
+    intent.setAction(MyVpnService.CONNECT_ACTION);
+    context.bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
+  }
+
+  void sendEvent(@Nullable WritableMap params) {
+    reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit("stateChanged", params);
   }
 
   @Override
@@ -34,7 +117,7 @@ public class FavorModule extends ReactContextBaseJavaModule {
     return NAME;
   }
 
-@ReactMethod
+  @ReactMethod
   public void version(Promise promise) {
     promise.resolve(Mobile.version());
   }
@@ -53,6 +136,10 @@ public class FavorModule extends ReactContextBaseJavaModule {
     options.setProxyEnable(params.getBoolean("proxy-enable"));
     options.setProxyGroupName(params.getString("proxy-group"));
     options.setProxyPort(params.getInt("proxy-port"));
+
+    // vpn setting
+    options.setVpnEnable(params.getBoolean("vpn-enable"));
+    options.setVpnPort(params.getInt("vpn-port"));
 
     // group setting
     options.setGroup(Objects.requireNonNull(params.getArray("groups")).toString());
@@ -90,27 +177,97 @@ public class FavorModule extends ReactContextBaseJavaModule {
     options.setVerbosity(params.getString("verbosity"));
     options.setEnableTLS(params.getBoolean("enable-tls"));
 
+    Global.enable_tls = options.getEnableTLS();
+    Global.enable_vpn = options.getVpnEnable();
+    Global.vpn_port = options.getVpnPort();
+
     try {
-      node = Mobile.newNode(options);
-      promise.resolve(null);
+      Global.NODE = Mobile.newNode(options);
     } catch (Exception e) {
-      e.printStackTrace();
-      Log.e(NAME, "start node " + e.toString());
-      promise.reject(e);
+      Log.e(NAME, "Start node failed:" + e);
+      promise.reject(NAME, "Start node failed:" + e);
+      return;
     }
+    promise.resolve(null);
+    Log.i(NAME, "start node successful");
   }
 
   @ReactMethod
   public void stop(Promise promise) {
     try {
-      if (node != null) {
-          node.stop();
-          node = null;
+      if (Global.NODE != null) {
+        Global.NODE.stop();
+        Global.NODE = null;
+        Log.i(NAME, "stop node successful");
+      } else {
+        Log.w(NAME, "stop node, node not running");
       }
-      promise.resolve(null);
     } catch (Exception e) {
-      Log.e(NAME, "stop node " + e.toString());
-      promise.reject(e);
+      Log.e(NAME, "Stop node failed:" + e);
+      promise.reject(NAME, "Stop node failed:" + e);
+      return;
     }
+    promise.resolve(null);
+  }
+
+  @ReactMethod
+  public void startVPN(ReadableMap options, Promise promise) {
+    if (Global.NODE == null) {
+      promise.reject(NAME, "Please start FavorX node first");
+      return;
+    }
+    ReadableArray nodes = options.getArray("nodes");
+    if (nodes == null) {
+      promise.reject(NAME, "The nodes of the vpn group are empty");
+      return;
+    }
+    for (int i = 0; i < nodes.size(); ++i) {
+      Global.vpn_group_nods.add(nodes.getString(i));
+    }
+
+    ReadableArray whitelist = options.getArray("whitelist");
+    ReadableArray blacklist = options.getArray("blacklist");
+    if (whitelist == null && blacklist == null) {
+      promise.reject(NAME, "whitelist and blacklist are empty");
+      return;
+    }
+    if (whitelist != null && blacklist != null) {
+      promise.reject(NAME, "whitelist, blacklist and only one of them can be used at the same time");
+      return;
+    }
+    if (whitelist != null) {
+      for (int i = 0; i < whitelist.size(); ++i) {
+        Global.vpn_whitelist.add(whitelist.getString(i));
+      }
+    }
+    if (blacklist != null) {
+      for (int i = 0; i < blacklist.size(); ++i) {
+        Global.vpn_blacklist.add(blacklist.getString(i));
+      }
+    }
+
+    Global.vpn_group = options.getString("group");
+
+    Log.d(NAME, "start VPN...");
+    prepareVpn(promise);
+  }
+
+  @ReactMethod
+  public void stopVPN(Promise promise) {
+    Intent intent = new Intent(reactContext, MyVpnService.class);
+    intent.setAction(MyVpnService.DISCONNECT_ACTION);
+    reactContext.startForegroundService(intent);
+    promise.resolve(null);
+    Log.i(NAME, "Stop VPN successful");
+  }
+
+  @Override
+  public void updateState(String up, String down, String total) {
+    WritableMap params = Arguments.createMap();
+    params.putString("up", up);
+    params.putString("down", down);
+    params.putString("total", total);
+    params.putBoolean("running", Global.RUNNING);
+    sendEvent(params);
   }
 }

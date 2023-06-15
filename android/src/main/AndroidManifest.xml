@@ -1,4 +1,33 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-          package="io.favorlabs.favor">
+  xmlns:tools="http://schemas.android.com/tools"
+  package="io.favorlabs.favor">
+
+  <uses-feature
+    android:name="android.software.leanback"
+    android:required="false" />
+  <uses-feature
+    android:name="android.hardware.touchscreen"
+    android:required="false" />
+
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <uses-permission
+    android:name="android.permission.ACCESS_WIFI_STATE"
+    tools:ignore="LeanbackUsesWifi" />
+
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <application>
+    <service
+      android:name="io.favorlabs.favor.service.MyVpnService"
+      android:enabled="true"
+      android:exported="true"
+      android:permission="android.permission.BIND_VPN_SERVICE">
+      <intent-filter>
+        <action android:name="android.net.VpnService" />
+      </intent-filter>
+    </service>
+  </application>
 
 </manifest>

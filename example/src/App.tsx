@@ -15,6 +15,8 @@ export default function App() {
       <Text>Result: {result}</Text>
       <Button title="start node" onPress={FavorStart} />
       <Button title="stop node" onPress={FavorStop} />
+      <Button title="start VPN" onPress={VPNStart} />
+      <Button title="stop VPN" onPress={VPNStop} />
     </View>
   );
 }
@@ -37,6 +39,32 @@ async function FavorStop() {
   try {
     await FavorX.stop();
     console.log('favorX stop ok');
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function VPNStart() {
+  try {
+    FavorX.addVpnStateListener((e) => {
+      console.log(e);
+    });
+    await FavorX.startVPN({
+      group: 'changeMe',
+      nodes: ['changeMe'],
+      // whitelist: ['org.telegram.messenger.web', 'com.twitter.android'],
+      blacklist: ['com.favorexample'],
+    });
+    console.log('favorX vpn start ok');
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function VPNStop() {
+  try {
+    await FavorX.stopVPN();
+    console.log('favorX vpn stop ok');
   } catch (e) {
     console.error(e);
   }

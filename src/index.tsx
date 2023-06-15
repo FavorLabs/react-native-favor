@@ -25,12 +25,12 @@ const Favor = NativeModules.Favor
 const localEventEmitter = new NativeEventEmitter(Favor);
 let stateListener: null | EmitterSubscription = null;
 
-type VPNState = {
+export interface VPNState {
   up: string;
   down: string;
   total: string;
   running: boolean;
-};
+}
 
 export const addVpnStateListener = (callback: (e: VPNState) => void) => {
   stateListener = localEventEmitter.addListener('stateChanged', (e) =>

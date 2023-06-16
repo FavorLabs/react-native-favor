@@ -1,22 +1,12 @@
 package io.favorlabs.favor;
 
-import static android.app.Activity.RESULT_OK;
-
-import android.app.Activity;
-import android.content.ComponentName;
-import android.content.Context;
 import android.content.Intent;
-import android.content.ServiceConnection;
-import android.net.VpnService;
-import android.os.IBinder;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.facebook.react.bridge.ActivityEventListener;
 import com.facebook.react.bridge.Arguments;
-import com.facebook.react.bridge.BaseActivityEventListener;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
@@ -38,73 +28,11 @@ import mobile.Options;
 public class FavorModule extends ReactContextBaseJavaModule implements MyVpnService.StateListener{
   public static final String NAME = "Favor";
   private final ReactApplicationContext reactContext;
-  private static final int START_VPN_PROFILE = 70;
-  private Promise vpnPromise;
-  private final ActivityEventListener mActivityEventListener = new BaseActivityEventListener() {
-    @Override
-    public void onActivityResult(Activity activity, int requestCode, int resultCode, Intent intent) {
-      if (requestCode == START_VPN_PROFILE) {
-        if (vpnPromise != null) {
-          if (resultCode == RESULT_OK) {
-            Log.i(NAME, "onActivityResult: start VPN...");
-            startVpn(vpnPromise);
-          } else {
-            vpnPromise.reject(NAME, "onActivityResult: Prepare VPN failed");
-            vpnPromise = null;
-          }
-        }
-      }
-    }
-  };
-
-  private ServiceConnection mConnection = new ServiceConnection() {
-    @Override
-    public void onServiceConnected(ComponentName className, IBinder service) {
-      Log.d(NAME, "VPN onServiceConnected: ");
-    }
-
-    @Override
-    public void onServiceDisconnected(ComponentName arg0) {
-      Log.d(NAME, "VPN onServiceDisconnected: ");
-    }
-  };
-
-  private void prepareVpn(final Promise promise) {
-    Activity currentActivity = getCurrentActivity();
-
-    if (currentActivity == null) {
-      promise.reject(NAME, "Activity doesn't exist");
-      return;
-    }
-
-    vpnPromise = promise;
-    Intent intent = VpnService.prepare(currentActivity);
-
-    if (intent != null) {
-      currentActivity.startActivityForResult(intent, START_VPN_PROFILE);
-      return;
-    }
-
-    startVpn(vpnPromise);
-  }
-
-  private void startVpn(Promise promise) {
-    Intent intent = new Intent(reactContext, MyVpnService.class);
-    intent.setAction(MyVpnService.CONNECT_ACTION);
-    reactContext.startForegroundService(intent);
-    promise.resolve(null);
-    Log.i(NAME, "start VPN successful");
-  }
 
   public FavorModule(ReactApplicationContext context) {
     super(context);
     reactContext = context;
-    reactContext.addActivityEventListener(mActivityEventListener);
     MyVpnService.addStateListener(this);
-
-    Intent intent = new Intent(context, MyVpnService.class);
-    intent.setAction(MyVpnService.CONNECT_ACTION);
-    context.bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
   }
 
   void sendEvent(@Nullable WritableMap params) {
@@ -196,6 +124,7 @@ public class FavorModule extends ReactContextBaseJavaModule implements MyVpnServ
   public void stop(Promise promise) {
     try {
       if (Global.NODE != null) {
+        stopVPN();
         Global.NODE.stop();
         Global.NODE = null;
         Log.i(NAME, "stop node successful");
@@ -214,6 +143,10 @@ public class FavorModule extends ReactContextBaseJavaModule implements MyVpnServ
   public void startVPN(ReadableMap options, Promise promise) {
     if (Global.NODE == null) {
       promise.reject(NAME, "Please start FavorX node first");
+      return;
+    }
+    if (Global.RUNNING) {
+      Log.d(NAME, "vpn already running");
       return;
     }
     ReadableArray nodes = options.getArray("nodes");
@@ -249,16 +182,21 @@ public class FavorModule extends ReactContextBaseJavaModule implements MyVpnServ
     Global.vpn_group = options.getString("group");
 
     Log.d(NAME, "start VPN...");
-    prepareVpn(promise);
+    Intent intent = new Intent(reactContext, MyVpnService.class);
+    intent.setAction(MyVpnService.CONNECT_ACTION);
+    reactContext.startForegroundService(intent);
   }
 
   @ReactMethod
-  public void stopVPN(Promise promise) {
+  public void stopVPN() {
+    if (!Global.RUNNING) {
+      Log.d(NAME, "vpn not running");
+      return;
+    }
+    Log.d(NAME, "stop VPN...");
     Intent intent = new Intent(reactContext, MyVpnService.class);
     intent.setAction(MyVpnService.DISCONNECT_ACTION);
     reactContext.startForegroundService(intent);
-    promise.resolve(null);
-    Log.i(NAME, "Stop VPN successful");
   }
 
   @Override
@@ -270,4 +208,14 @@ public class FavorModule extends ReactContextBaseJavaModule implements MyVpnServ
     params.putBoolean("running", Global.RUNNING);
     sendEvent(params);
   }
+  @Override
+  public void updateStatus() {
+    WritableMap params = Arguments.createMap();
+    params.putString("up", "");
+    params.putString("down", "");
+    params.putString("total", "");
+    params.putBoolean("running", Global.RUNNING);
+    sendEvent(params);
+  }
+
 }

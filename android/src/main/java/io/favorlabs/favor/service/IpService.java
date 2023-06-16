@@ -13,7 +13,7 @@ import io.favorlabs.favor.utils.Ipv6AddressUtil;
 import io.favorlabs.favor.ws.MyWebSocketClient;
 
 public class IpService {
-  private static final String TAG = "IPService";
+  private static final String TAG = "VPNIPService";
   private final String serverIp;
   private final int serverPort;
   private final String key;

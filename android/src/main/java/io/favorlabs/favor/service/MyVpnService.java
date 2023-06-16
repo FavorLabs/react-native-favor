@@ -7,27 +7,23 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageInfo;
 import android.net.VpnService;
-import android.os.IBinder;
 import android.provider.Settings;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
-import java.util.concurrent.TimeUnit;
 
 import io.favorlabs.favor.R;
 import io.favorlabs.favor.model.Config;
 import io.favorlabs.favor.model.Const;
 import io.favorlabs.favor.model.Global;
+import io.favorlabs.favor.thread.NotifyThread;
 import io.favorlabs.favor.thread.VpnThread;
 
 public class MyVpnService extends VpnService {
   private static StateListener stateListener;
   public static final String CONNECT_ACTION = "io.favorlabs.favor.service.CONNECT_ACTION";
   public static final String DISCONNECT_ACTION = "io.favorlabs.favor.service.DISCONNECT_ACTION";
-  public static final String NOTIFICATION_CHANNEL = "FavorTunnel";
   private Config config;
   private NotificationManager notificationManager;
   private NotificationCompat.Builder notificationBuilder;
@@ -45,16 +41,9 @@ public class MyVpnService extends VpnService {
     }
   };
 
-
   @Override
   public void onCreate() {
-    super.onCreate();
     registerReceiver(airplaneModeOnReceiver, filter);
-  }
-
-  @Override
-  public IBinder onBind(Intent intent) {
-    return null;
   }
 
   @Override
@@ -85,12 +74,7 @@ public class MyVpnService extends VpnService {
 
   @Override
   public void onDestroy() {
-    super.onDestroy();
-    super.unregisterReceiver(airplaneModeOnReceiver);
-  }
-
-  @Override
-  public void onRevoke() {
+    unregisterReceiver(airplaneModeOnReceiver);
     stopVpn();
   }
 
@@ -104,39 +88,29 @@ public class MyVpnService extends VpnService {
     Log.i(Const.DEFAULT_TAG, config.toString());
   }
 
-  public boolean isSystemApp(PackageInfo pInfo) {
-    return ((pInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0);
-  }
-
-  public boolean isSystemUpdateApp(PackageInfo pInfo) {
-    return ((pInfo.applicationInfo.flags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0);
-  }
-
-  public boolean isUserApp(PackageInfo pInfo) {
-    return (!isSystemApp(pInfo) && !isSystemUpdateApp(pInfo));
-  }
-
   public void createNotification() {
-    NotificationChannel channel;
-    channel = new NotificationChannel(NOTIFICATION_CHANNEL, "VPN connection state", NotificationManager.IMPORTANCE_LOW);
+    NotificationChannel channel = new NotificationChannel(Const.NOTIFICATION_CHANNEL_ID, Const.NOTIFICATION_CHANNEL_NAME, NotificationManager.IMPORTANCE_NONE);
     channel.setDescription("Provides information about the VPN connection state and serves as permanent notification to keep the VPN service running in the background.");
     channel.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
     channel.setShowBadge(false);
     notificationManager = getSystemService(NotificationManager.class);
     notificationManager.createNotificationChannel(channel);
     notificationBuilder = new NotificationCompat.Builder(this, channel.getId());
-    notificationBuilder.setSmallIcon(R.drawable.autofill_inline_suggestion_chip_background).setPriority(NotificationCompat.PRIORITY_MIN).setOngoing(true).setShowWhen(false).setOnlyAlertOnce(true);
+    notificationBuilder.setSmallIcon(R.drawable.autofill_inline_suggestion_chip_background);
   }
 
   public void startVpn() {
     try {
-      if (Global.RUNNING) {
-        stopVpn();
-        TimeUnit.SECONDS.sleep(5);
-      }
       Global.RUNNING = true;
+      this.startForeground(Const.NOTIFICATION_ID, notificationBuilder.build());
+
       VpnThread vpnThread = new VpnThread(config, this, ipService, notificationManager, notificationBuilder);
       vpnThread.start();
+
+      // start notify threads
+      NotifyThread notifyThread = new NotifyThread(notificationManager, notificationBuilder, this, ipService);
+      notifyThread.start();
+
       Log.i(Const.DEFAULT_TAG, "VPN started");
     } catch (Exception e) {
       Global.RUNNING = false;
@@ -145,9 +119,9 @@ public class MyVpnService extends VpnService {
   }
 
   public void stopVpn() {
-    this.resetGlobalVar();
-    this.stopSelf();
-    // todo send event
+    this.stopForeground(true);
+    resetGlobalVar();
+    updateStatus();
     Log.i(Const.DEFAULT_TAG, "VPN stopped");
   }
 
@@ -158,6 +132,8 @@ public class MyVpnService extends VpnService {
 
   public interface StateListener {
     void updateState(String up, String down, String total);
+
+    void updateStatus();
   }
 
   public synchronized static void addStateListener(StateListener sl) {
@@ -167,6 +143,12 @@ public class MyVpnService extends VpnService {
   public synchronized void updateStateString(String up, String down, String total) {
     if (stateListener != null) {
       stateListener.updateState(up, down, total);
+    }
+  }
+
+  public synchronized void updateStatus() {
+    if (stateListener != null) {
+      stateListener.updateStatus();
     }
   }
 

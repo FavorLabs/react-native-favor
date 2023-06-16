@@ -3,6 +3,8 @@ package io.favorlabs.favor.model;
 public class Const {
     public static final String APP_NAME = "FavorVPN";
     public static final int NOTIFICATION_ID = 911;
+    public static final String NOTIFICATION_CHANNEL_ID = "FavorTunnel";
+    public static final String NOTIFICATION_CHANNEL_NAME = "FavorTunnel";
     public static final String DEFAULT_TAG = APP_NAME;
     public static final int BUFFER_SIZE = 1500;
     public static final int MTU = 1500;

@@ -92,9 +92,6 @@ public class VpnThread extends BaseThread {
               Log.i(TAG, "webSocket is open");
               Global.CONNECTED = true;
             }
-            // start notify threads
-            NotifyThread notifyThread = new NotifyThread(notificationManager, notificationBuilder, vpnService, ipService);
-            notifyThread.start();
             // forward data
             byte[] buf = new byte[Const.BUFFER_SIZE];
             while (Global.RUNNING) {

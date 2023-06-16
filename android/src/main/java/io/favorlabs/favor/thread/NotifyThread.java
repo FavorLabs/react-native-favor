@@ -15,7 +15,7 @@ import io.favorlabs.favor.service.MyVpnService;
 import io.favorlabs.favor.utils.FormatUtil;
 
 public class NotifyThread extends BaseThread {
-    private static final String TAG = "NotifyThread";
+    private static final String TAG = "VPNNotifyThread";
     private final NotificationManager notificationManager;
     private final NotificationCompat.Builder builder;
 
@@ -29,7 +29,6 @@ public class NotifyThread extends BaseThread {
     @Override
     public void run() {
         Log.i(TAG, "start");
-        vpnService.startForeground(Const.NOTIFICATION_ID, builder.build());
         int seconds = 0;
         while (Global.RUNNING) {
             try {

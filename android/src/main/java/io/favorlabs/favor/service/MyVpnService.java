@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.VpnService;
+import android.os.IBinder;
 import android.provider.Settings;
 import android.util.Log;
 
@@ -76,6 +77,11 @@ public class MyVpnService extends VpnService {
   public void onDestroy() {
     unregisterReceiver(airplaneModeOnReceiver);
     stopVpn();
+  }
+
+  @Override
+  public IBinder onBind(Intent intent) {
+    return null;
   }
 
   public void initConfig() {

@@ -1,0 +1,8 @@
+framework module "FavorX" {
+	header "ref.h"
+    header "Mobile.objc.h"
+    header "Universe.objc.h"
+    header "FavorX.h"
+
+    export *
+}

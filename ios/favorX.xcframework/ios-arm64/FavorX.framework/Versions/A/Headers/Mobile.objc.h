@@ -46,6 +46,7 @@ complexity.
  * vpn setting
  */
 @property (nonatomic) BOOL vpnEnable;
+@property (nonatomic) NSString* _Nonnull vpnGroupName;
 @property (nonatomic) long vpnPort;
 /**
  * proxy setting
@@ -142,7 +143,9 @@ complexity.
 
 // skipped method Options.TrafficEnable with unsupported parameter or return types
 
-// skipped method Options.VpnAddr with unsupported parameter or return types
+// skipped method Options.VpnGroup with unsupported parameter or return types
+
+// skipped method Options.VpnListen with unsupported parameter or return types
 
 // skipped method Options.WSAddr with unsupported parameter or return types
 

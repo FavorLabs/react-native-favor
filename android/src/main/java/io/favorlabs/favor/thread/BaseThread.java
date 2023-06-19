@@ -10,6 +10,4 @@ import io.favorlabs.favor.service.MyVpnService;
 public class BaseThread extends Thread {
     protected MyVpnService vpnService;
     protected IpService ipService;
-    protected NotificationManager notificationManager;
-    protected NotificationCompat.Builder notificationBuilder;
 }

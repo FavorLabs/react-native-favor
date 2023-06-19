@@ -4,6 +4,9 @@ import android.annotation.SuppressLint;
 import android.text.TextUtils;
 import android.util.Log;
 
+import org.asynchttpclient.ws.WebSocket;
+
+import java.io.FileOutputStream;
 import java.net.UnknownHostException;
 
 import io.favorlabs.favor.model.Const;
@@ -19,14 +22,19 @@ public class IpService {
   private final String key;
   private final boolean https;
 
-  public IpService(String serverIp, int serverPort, String key) {
-    this.serverIp = serverIp;
-    this.serverPort = serverPort;
-    this.key = key;
+  public IpService() {
+    this.serverIp = Const.DEFAULT_SERVER_ADDRESS;
+    this.serverPort = Global.vpn_port.intValue();
+    this.key = Const.DEFAULT_KEY;
     this.https = Global.enable_tls;
   }
 
-  public boolean addObserveGroup() {
+  public WebSocket connectWebSocket(FileOutputStream out) throws Exception {
+    @SuppressLint("DefaultLocale") String api = String.format("%s://%s:%d%s", https ? "wss" : "ws", serverIp, serverPort, Const.DEFAULT_PATH);
+    return MyWebSocketClient.connectWebSocket(api, key, out);
+  }
+
+  public String addObserveGroup() {
     StringBuilder nodes = new StringBuilder();
     for (String v : Global.vpn_group_nods) {
       if (nodes.toString().equals("")) {
@@ -38,7 +46,7 @@ public class IpService {
     @SuppressLint("DefaultLocale") String api = String.format("%s://%s:%d/observe/add/group?nodes=%s", https ? "https" : "http", serverIp, serverPort, nodes);
     String resp = MyWebSocketClient.httpGet(api, key);
     Log.i(TAG, String.format("get api:%s resp:%s", api, resp.toString()));
-    return TextUtils.equals(resp, "OK");
+    return resp;
   }
 
   public void delObserveGroup() {
@@ -65,7 +73,7 @@ public class IpService {
     if (ip.length == 2) {
       return new LocalIp(ip[0], Integer.parseInt(ip[1]));
     }
-    return new LocalIp(Const.DEFAULT_LOCAL_ADDRESS, Const.DEFAULT_LOCAL_PREFIX_LENGTH);
+    return null;
   }
 
   public LocalIp pickIpv6() {
@@ -89,7 +97,7 @@ public class IpService {
         return new LocalIp(randomIpv6Address, prefixLength);
       }
     }
-    return new LocalIp(Const.DEFAULT_LOCAL_V6_ADDRESS, Const.DEFAULT_LOCAL_V6_PREFIX_LENGTH);
+    return null;
   }
 
   public void keepAliveIp(String ip) {
@@ -102,5 +110,6 @@ public class IpService {
     @SuppressLint("DefaultLocale") String api = String.format("%s://%s:%d/register/delete/ip?ip=%s", https ? "https" : "http", serverIp, serverPort, ip);
     String resp = MyWebSocketClient.httpGet(api, key);
     Log.i(TAG, String.format("get api:%s resp:%s", api, resp));
+    delObserveGroup();
   }
 }

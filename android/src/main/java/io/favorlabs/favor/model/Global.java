@@ -6,7 +6,6 @@ import java.util.List;
 import mobile.Node;
 
 public class Global {
-    public static volatile boolean CONNECTED;
     public static volatile boolean RUNNING;
     public static volatile String LOCAL_IP;
     public static volatile String LOCAL_IPv6;

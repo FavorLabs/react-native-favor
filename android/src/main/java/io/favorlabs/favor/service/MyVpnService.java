@@ -7,28 +7,38 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.net.VpnService;
+import android.os.Binder;
+import android.os.Build;
 import android.os.IBinder;
+import android.os.ParcelFileDescriptor;
 import android.provider.Settings;
+import android.system.OsConstants;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
+import com.facebook.react.bridge.Promise;
+
+import org.asynchttpclient.ws.WebSocket;
+
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.Objects;
+
 import io.favorlabs.favor.R;
-import io.favorlabs.favor.model.Config;
 import io.favorlabs.favor.model.Const;
 import io.favorlabs.favor.model.Global;
+import io.favorlabs.favor.model.LocalIp;
 import io.favorlabs.favor.thread.NotifyThread;
 import io.favorlabs.favor.thread.VpnThread;
 
 public class MyVpnService extends VpnService {
   private static StateListener stateListener;
-  public static final String CONNECT_ACTION = "io.favorlabs.favor.service.CONNECT_ACTION";
-  public static final String DISCONNECT_ACTION = "io.favorlabs.favor.service.DISCONNECT_ACTION";
-  private Config config;
-  private NotificationManager notificationManager;
-  private NotificationCompat.Builder notificationBuilder;
-  private IpService ipService;
+  private static IpService ipService;
+  private VpnBinder vpnBinder = null;
   private final IntentFilter filter = new IntentFilter(Intent.ACTION_AIRPLANE_MODE_CHANGED);
   private final BroadcastReceiver airplaneModeOnReceiver = new BroadcastReceiver() {
     @Override
@@ -36,7 +46,8 @@ public class MyVpnService extends VpnService {
       String action = intent.getAction();
       if (action.equals(Intent.ACTION_AIRPLANE_MODE_CHANGED)) {
         if (Settings.Global.getInt(context.getContentResolver(), Settings.Global.AIRPLANE_MODE_ON, 0) != 0) {
-          stopVpn();
+          Log.i(Const.DEFAULT_TAG, "VPN airplane_mode_on");
+          vpnBinder.disconnect();
         }
       }
     }
@@ -44,96 +55,44 @@ public class MyVpnService extends VpnService {
 
   @Override
   public void onCreate() {
+    Log.i(Const.DEFAULT_TAG, "VPN onCreate");
     registerReceiver(airplaneModeOnReceiver, filter);
-  }
-
-  @Override
-  public int onStartCommand(Intent intent, int flags, int startId) {
-    if (intent == null) {
-      return START_NOT_STICKY;
-    }
-    switch (intent.getAction()) {
-      case CONNECT_ACTION:
-        Log.i(Const.DEFAULT_TAG, "----cmd start");
-        // init config
-        initConfig();
-        // create notification
-        createNotification();
-        // start VPN
-        startVpn();
-        return START_STICKY;
-      case DISCONNECT_ACTION:
-        Log.i(Const.DEFAULT_TAG, "----cmd stop");
-        // stop VPN
-        stopVpn();
-        return START_NOT_STICKY;
-      default:
-        return START_NOT_STICKY;
-    }
-  }
-
-
-  @Override
-  public void onDestroy() {
-    unregisterReceiver(airplaneModeOnReceiver);
-    stopVpn();
+    vpnBinder = new VpnBinder();
   }
 
   @Override
   public IBinder onBind(Intent intent) {
-    return null;
+    Log.i(Const.DEFAULT_TAG, "VPN onBind " + intent.toString());
+    return vpnBinder;
   }
 
-  public void initConfig() {
-    String server = Const.DEFAULT_SERVER_ADDRESS;
-    String path = Const.DEFAULT_PATH;
-    String dns = Const.DEFAULT_DNS;
-    String key = Const.DEFAULT_KEY;
-    this.config = new Config(server, path, dns, key);
-    this.ipService = new IpService(config.getServerAddress(), config.getServerPort(), config.getKey());
-    Log.i(Const.DEFAULT_TAG, config.toString());
+  public void onRevoke() {
+    Log.i(Const.DEFAULT_TAG, "VPN onRevoke");
+  }
+
+  @Override
+  public void onDestroy() {
+    Log.i(Const.DEFAULT_TAG, "VPN onDestroy");
+    unregisterReceiver(airplaneModeOnReceiver);
+    vpnBinder.disconnect();
   }
 
   public void createNotification() {
     NotificationChannel channel = new NotificationChannel(Const.NOTIFICATION_CHANNEL_ID, Const.NOTIFICATION_CHANNEL_NAME, NotificationManager.IMPORTANCE_NONE);
     channel.setDescription("Provides information about the VPN connection state and serves as permanent notification to keep the VPN service running in the background.");
     channel.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
-    channel.setShowBadge(false);
-    notificationManager = getSystemService(NotificationManager.class);
+    channel.setShowBadge(true);
+    NotificationManager notificationManager = getSystemService(NotificationManager.class);
     notificationManager.createNotificationChannel(channel);
-    notificationBuilder = new NotificationCompat.Builder(this, channel.getId());
-    notificationBuilder.setSmallIcon(R.drawable.autofill_inline_suggestion_chip_background);
-  }
-
-  public void startVpn() {
-    try {
-      Global.RUNNING = true;
-      this.startForeground(Const.NOTIFICATION_ID, notificationBuilder.build());
-
-      VpnThread vpnThread = new VpnThread(config, this, ipService, notificationManager, notificationBuilder);
-      vpnThread.start();
-
-      // start notify threads
-      NotifyThread notifyThread = new NotifyThread(notificationManager, notificationBuilder, this, ipService);
-      notifyThread.start();
-
-      Log.i(Const.DEFAULT_TAG, "VPN started");
-    } catch (Exception e) {
-      Global.RUNNING = false;
-      Log.e(Const.DEFAULT_TAG, "error on startVPN:" + e.toString());
-    }
-  }
-
-  public void stopVpn() {
-    this.stopForeground(true);
-    resetGlobalVar();
-    updateStatus();
-    Log.i(Const.DEFAULT_TAG, "VPN stopped");
-  }
-
-  private void resetGlobalVar() {
-    Global.CONNECTED = false;
-    Global.RUNNING = false;
+    NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, channel.getId());
+    notificationBuilder.setSmallIcon(R.drawable.autofill_inline_suggestion_chip_background)
+      .setPriority(NotificationCompat.PRIORITY_MIN)
+      .setOngoing(true)
+      .setShowWhen(false)
+      .setOnlyAlertOnce(true);
+    startForeground(Const.NOTIFICATION_ID, notificationBuilder.build());
+    NotifyThread notifyThread = new NotifyThread(notificationManager, notificationBuilder, this, ipService);
+    notifyThread.start();
   }
 
   public interface StateListener {
@@ -156,6 +115,143 @@ public class MyVpnService extends VpnService {
     if (stateListener != null) {
       stateListener.updateStatus();
     }
+  }
+
+  public class VpnBinder extends Binder {
+    private WebSocket webSocket;
+    private FileInputStream in;
+    private FileOutputStream out;
+    private ParcelFileDescriptor tun;
+
+    public void connect(Promise promise) {
+      Log.d(Const.DEFAULT_TAG, "VPN start...");
+      ipService = new IpService();
+      String err = ipService.addObserveGroup();
+      if (!Objects.equals(err, "OK")) {
+        promise.reject(Const.DEFAULT_TAG, "VPN Observe Group err:" + err);
+        return;
+      }
+      if (!ipService.health()) {
+        promise.reject(Const.DEFAULT_TAG, "VPN connect test failed");
+        return;
+      }
+      // pick ip
+      LocalIp localIP = ipService.pickIp();
+      if (localIP == null) {
+        promise.reject(Const.DEFAULT_TAG, "VPN pick ipv4 failed");
+        return;
+      }
+      Global.LOCAL_IP = localIP.getLocalIp();
+      //pick ipv6
+      LocalIp localIPv6 = ipService.pickIpv6();
+      if (localIPv6 == null) {
+        ipService.deleteIp(Global.LOCAL_IP);
+        promise.reject(Const.DEFAULT_TAG, "VPN pick ipv6 failed");
+        return;
+      }
+      Global.LOCAL_IPv6 = localIPv6.getLocalIp();
+
+      try {
+        // create tun
+        tun = createTunnel(localIP, localIPv6);
+        if (tun == null) {
+          ipService.deleteIp(Global.LOCAL_IP);
+          promise.reject(Const.DEFAULT_TAG, "VPN create tun failed");
+          return;
+        }
+        in = new FileInputStream(tun.getFileDescriptor());
+        out = new FileOutputStream(tun.getFileDescriptor());
+        // create ws client
+        webSocket = ipService.connectWebSocket(out);
+        if (webSocket == null || !webSocket.isOpen()) {
+          ipService.deleteIp(Global.LOCAL_IP);
+          Log.i(Const.DEFAULT_TAG, "VPN webSocket is not open");
+          in.close();
+          out.close();
+          promise.reject(Const.DEFAULT_TAG, "VPN webSocket is not open");
+        } else {
+          Log.i(Const.DEFAULT_TAG, "VPN webSocket is open");
+          Global.RUNNING = true;
+          VpnThread vpnThread = new VpnThread(in, webSocket, this);
+          vpnThread.start();
+          createNotification();
+          Log.i(Const.DEFAULT_TAG, "VPN started");
+        }
+      } catch (Exception e) {
+        ipService.deleteIp(Global.LOCAL_IP);
+        promise.reject(Const.DEFAULT_TAG, "VPN start failed:" + e.toString());
+      }
+    }
+
+    public void disconnect() {
+      if (!Global.RUNNING) {
+        return;
+      }
+      Log.d(Const.DEFAULT_TAG, "VPN stop...");
+      Global.RUNNING = false;
+      ipService.deleteIp(Global.LOCAL_IP);
+      closeTun();
+      updateStatus();
+      stopForeground(true);
+      Log.i(Const.DEFAULT_TAG, "VPN stopped");
+    }
+
+    public void closeTun() {
+      if (webSocket != null && webSocket.isOpen()) {
+        webSocket.sendCloseFrame();
+      }
+      if (in != null) {
+        try {
+          in.close();
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      }
+      if (out != null) {
+        try {
+          out.close();
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      }
+      if (tun != null) {
+        try {
+          tun.close();
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      }
+    }
+  }
+
+  public ParcelFileDescriptor createTunnel(LocalIp localIP, LocalIp localIPv6) throws PackageManager.NameNotFoundException {
+    VpnService.Builder builder = new Builder();
+    builder.setMtu(Const.MTU)
+      .addAddress(localIP.getLocalIp(), localIP.getLocalPrefixLength())
+      .addAddress(localIPv6.getLocalIp(), localIPv6.getLocalPrefixLength())
+      .addRoute(Const.DEFAULT_ROUTE, 0)
+      .addRoute(Const.DEFAULT_ROUTEv6, 0)
+      .addDnsServer(Const.DEFAULT_DNS)
+      .setSession(Const.APP_NAME)
+      .setConfigureIntent(null)
+      .allowFamily(OsConstants.AF_INET)
+      .allowFamily(OsConstants.AF_INET6)
+      .setBlocking(true);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      builder.setMetered(false);
+    }
+    if (Global.vpn_whitelist.isEmpty()) {
+      for (String packageName : Global.vpn_blacklist) {
+        builder.addDisallowedApplication(packageName);
+      }
+    } else {
+      for (String packageName : Global.vpn_whitelist) {
+        builder.addAllowedApplication(packageName);
+      }
+    }
+    Log.i(Const.DEFAULT_TAG, "VPN whitelist apps:" + Global.vpn_whitelist);
+    Log.i(Const.DEFAULT_TAG, "VPN blacklist apps:" + Global.vpn_blacklist);
+    return builder.establish();
   }
 
 }

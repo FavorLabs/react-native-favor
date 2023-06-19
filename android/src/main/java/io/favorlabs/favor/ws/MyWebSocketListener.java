@@ -8,20 +8,17 @@ import org.asynchttpclient.ws.WebSocketListener;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
-import io.favorlabs.favor.model.Config;
 import io.favorlabs.favor.model.Stats;
 
 public class MyWebSocketListener implements WebSocketListener {
-    private static final String TAG = "MyWebSocketListener";
-    private Config config;
+    private static final String TAG = "VPN MyWebSocketListener";
     private FileOutputStream out;
 
     public MyWebSocketListener() {
 
     }
 
-    public MyWebSocketListener(Config config, FileOutputStream out) {
-        this.config = config;
+    public MyWebSocketListener(FileOutputStream out) {
         this.out = out;
     }
 
@@ -42,7 +39,7 @@ public class MyWebSocketListener implements WebSocketListener {
 
     @Override
     public void onBinaryFrame(byte[] payload, boolean finalFragment, int rsv) {
-        if (out == null || config == null || payload == null || payload.length == 0) {
+        if (out == null || payload == null || payload.length == 0) {
             return;
         }
         try {

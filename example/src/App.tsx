@@ -22,12 +22,20 @@ export default function App() {
 }
 
 async function FavorStart() {
+  FavorX.removeVpnStateListener();
+  FavorX.addVpnStateListener((e) => {
+    console.log(e);
+  });
   try {
     await FavorX.start({
       'network-id': 1,
-      'boot-nodes': '',
+      'boot-nodes':
+        // '/ip4/94.103.5.122/tcp/1818/p2p/12D3KooWA9J6uL7xjgYD1j8ybHqVeHMAstTzZXsNpDAU4VqRScwU',
+        '/ip4/192.168.100.77/tcp/1634/p2p/12D3KooWGpaG46ChgJzGB2n7nnN3KvbTqnVL8JgirEKYKG8DMrt8',
       'chain-endpoint': '',
       'oracle-contract-addr': '',
+      'vpn-enable': true,
+      'debug-api-enable': true
     });
     console.log('favorX start ok');
   } catch (e) {
@@ -46,12 +54,12 @@ async function FavorStop() {
 
 async function VPNStart() {
   try {
-    FavorX.addVpnStateListener((e) => {
-      console.log(e);
-    });
     await FavorX.startVPN({
-      group: 'changeMe',
-      nodes: ['changeMe'],
+      group: 'proxy-test',
+      nodes: [
+        // '69e1256d685f684c5b903b70dc75b09c3a865a093bf18411973e42fc87fe682f',
+        '9adae22e97b2f58e38b45cc1dff48b484868e4fc4f0a27fcd12bbe7733409b30',
+      ],
       // whitelist: ['org.telegram.messenger.web', 'com.twitter.android'],
       blacklist: ['com.favorexample'],
     });
